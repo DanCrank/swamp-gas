@@ -1,0 +1,3 @@
+(fp_lib_table
+  (lib (name swampgas)(type KiCad)(uri ${KIPRJMOD}/swampgas.pretty)(options "")(descr ""))
+)
