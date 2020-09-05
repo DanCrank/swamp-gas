@@ -1,4 +1,4 @@
-# SwampGas 0.2
+# SwampGas 1.0
 # based on "CircuitPython demo - NeoPixel" by AdaFruit
 
 # NOTE: current breadboard prototype is wired with the
@@ -10,8 +10,7 @@ import board
 import neopixel
 from digitalio import DigitalInOut, Direction
 
-print("SwampGas 0.2 startup")
-
+print("SwampGas 1.0 startup")
 # multiplexer A (LSB) to trinket A0 (pin labeled 1!) as digital out
 mux_0 = DigitalInOut(board.A0)
 mux_0.direction = Direction.OUTPUT
@@ -33,27 +32,47 @@ num_pixels = 60
 # current draw is roughly proportional to brightness but also
 # depends a great deal on the lighting pattern.
 neopixel_brightness = 1.0
-# "speed" at which color-cycling patterns cycle; this is the
-# step size to go around the 256-position color wheel (e.g.
-# a value of 2 will cycle through 128 colors).
-color_cycle_speed = 16
-# time step between animation steps; higher numbers are slower
-sweep_speed = 0.01
-
-RED = (255, 0, 0)
-YELLOW = (255, 150, 0)
-GREEN = (0, 255, 0)
-CYAN = (0, 255, 255)
-BLUE = (0, 0, 255)
-PURPLE = (180, 0, 255)
-WHITE = (255, 255, 255)
-BLACK = (0, 0, 0)
 
 
 pixels = neopixel.NeoPixel(pixel_pin,
                            num_pixels,
                            brightness=neopixel_brightness,
                            auto_write=False)
+
+
+# never apologize, never explain
+rainbow_magic = 0
+rainbow_speed = 16
+
+
+def taste_the_rainbow():
+    global rainbow_magic
+    rainbow_magic = (rainbow_magic + rainbow_speed) % 256
+
+
+# swampgas color constants (indexed to dip switch selections)
+WHITE = 0
+RED = 1
+BLUE = 2
+GREEN = 3
+YELLOW = 4
+CYAN = 5
+PURPLE = 6
+# 7-14 TBD; will return black
+RAINBOW = 15
+
+
+# color mapping
+def color(select):
+    if select == WHITE: return (255, 255, 255)
+    elif select == RED: return (255, 0, 0)
+    elif select == BLUE: return (0, 0, 255)
+    elif select == GREEN: return (0, 255, 0)
+    elif select == YELLOW: return (255, 150, 0)
+    elif select == CYAN: return (0, 255, 255)
+    elif select == PURPLE: return (180, 0, 255)
+    elif select == RAINBOW: return wheel(rainbow_magic)
+    else: return (0, 0, 0)
 
 
 def wheel(pos):
@@ -72,7 +91,7 @@ def wheel(pos):
 
 def fade(color, frac):
     if frac == 0:
-        return BLACK
+        return (0, 0, 0)
     return(int(color[0] * frac * frac),
            int(color[1] * frac * frac),
            int(color[2] * frac * frac))
@@ -90,15 +109,15 @@ def bounce_left(pos):
     return pos
 
 
-def chase_full(color, width, wait):
+def clockwise_sweep(color, width, wait):
     for i in range(num_pixels):
         for j in range(width + 1):
             pixels[(i + j) % num_pixels] = fade(color, (j / width))
         pixels.show()
-        time.sleep(wait)
+        if wait > 0: time.sleep(wait)
 
 
-def bounce_each_side(color, width, sides, wait):
+def bounce(color, width, sides, wait):
     pixels_per_side = int(num_pixels / sides)
     for i in range(pixels_per_side):
         # sweeping left to right
@@ -107,14 +126,14 @@ def bounce_each_side(color, width, sides, wait):
                 pixels[bounce_right(i + j, pixels_per_side) + k] = \
                     fade(color, (j / width))
         pixels.show()
-        time.sleep(wait)
+        if wait > 0: time.sleep(wait)
     for i in range(pixels_per_side - 2, 1, -1):
         # sweeping right to left
         for j in range(width + 1):
             for k in range(0, num_pixels, pixels_per_side):
                 pixels[bounce_left(i - j) + k] = fade(color, (j / width))
         pixels.show()
-        time.sleep(wait)
+        if wait > 0: time.sleep(wait)
 
 
 def read_dipswitch_pin(pin):
@@ -125,7 +144,7 @@ def read_dipswitch_pin(pin):
     mux_1.value = pin >> 1 & 1
     mux_0.value = pin & 1
     # settle
-    time.sleep(0.02)
+    # time.sleep(0.02)
     # read the mux output (NOTE: active LOW)
     return not mux_out.value
 
@@ -137,18 +156,52 @@ def read_dipswitch():
     return dip_value
 
 
-# neopixel strip test
+# main loop
+# TODO: turn off built-in neopixel
 while True:
-    pixels.fill(BLACK)
+    pixels.fill((0, 0, 0))
     pixels.show()
-    for i in range(0, 256, color_cycle_speed):
-        bounce_each_side(wheel(i), 3, 3, sweep_speed)
-    pixels.fill(BLACK)
-    pixels.show()
-    for i in range(0, 256, color_cycle_speed):
-        chase_full(wheel(i), 12, sweep_speed)
-
-# dip switch test
-# while True:
-#    print(read_dipswitch())
-#    time.sleep(1)
+    # which color and pattern?
+    select = read_dipswitch()
+    select_color = select & 0x0F
+    select_pattern = select >> 4
+    if select_pattern == 0:
+        # 0 = clockwise sweep fast
+        clockwise_sweep(color(select_color), 12, 0)
+    elif select_pattern == 1:
+        # 1 = clockwise sweep slow
+        clockwise_sweep(color(select_color), 12, 0.05)
+    elif select_pattern == 2:
+        # 2 = 3-way bounce
+        bounce(color(select_color), 3, 3, 0)
+    elif select_pattern == 3:
+        # 3 = 6-way bounce
+        bounce(color(select_color), 3, 6, 0)
+    # elif select_pattern == 4:
+        # 4 = 
+    # elif select_pattern == 5:
+        # 5 = 
+    # elif select_pattern == 6:
+        # 6 = 
+    # elif select_pattern == 7:
+        # 7 = 
+    # elif select_pattern == 8:
+        # 8 = 
+    # elif select_pattern == 9:
+        # 9 = 
+    # elif select_pattern == 10:
+        # 10 = 
+    # elif select_pattern == 11:
+        # 11 = 
+    # elif select_pattern == 12:
+        # 12 = 
+    # elif select_pattern == 13:
+        # 13 = 
+    # elif select_pattern == 14:
+        # 14 = 
+    # elif select_pattern == 15:
+        # 15 = 
+    else:
+        # undefined
+        time.sleep(1)
+    taste_the_rainbow()
