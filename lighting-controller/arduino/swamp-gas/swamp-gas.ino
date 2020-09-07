@@ -1,3 +1,21 @@
+/*
+ * swamp-gas.ino: lighting controller code for a flying saucer, based on Arduino & NeoPixel.
+ * Copyright (C) 2020 Dan Crank (danno@danno.org)
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ */
+
 #include <Adafruit_NeoPixel.h>
 #ifdef __AVR__
   #include <avr/power.h>
@@ -5,7 +23,7 @@
 
 #define NUM_PIXELS 60
 #define PIXEL_PIN 4
-#define PIXEL_BRIGHTNESS 100
+#define PIXEL_BRIGHTNESS 100 // scale of 255
 
 // multiplexer A (LSB) to trinket A0 (Arduino pin 1!) as digital out
 #define MUX0_PIN 1
@@ -19,11 +37,13 @@
 Adafruit_NeoPixel strip;
 
 void setup() {
-  Serial.println("SwampGas 1.0 startup");
+  Serial.println("SwampGas 1.0 Copyright (C) 2020 Dan Crank (danno@danno.org)");
+  Serial.println("This program comes with ABSOLUTELY NO WARRANTY.");
   strip = Adafruit_NeoPixel(NUM_PIXELS, PIXEL_PIN, NEO_GRB + NEO_KHZ800);
   strip.begin();
   strip.setBrightness(PIXEL_BRIGHTNESS);
-  strip.show(); // Initialize all pixels to 'off'
+  strip.clear(); // Initialize all pixels to 'off'
+  strip.show();
   pinMode(MUX0_PIN, OUTPUT);
   pinMode(MUX1_PIN, OUTPUT);
   pinMode(MUX2_PIN, OUTPUT);
@@ -34,23 +54,31 @@ void setup() {
 void loop() {
   int iDipswitch = readDipswitch();
   int iPattern = (iDipswitch >> 4 & 0x0F);
-  int iColor = (iDipswitch & 0x0F);
+  int iColorIndex = (iDipswitch & 0x0F);
   switch (iPattern) {
     case 0:
       //clockwise sweep fast
-      clockwiseSweep(iColor, 12, 1);
+      clockwiseSweep(iColorIndex, 12, 1);
       break;
     case 1:
       //clockwise sweep slow
-      clockwiseSweep(iColor, 12, 15);
+      clockwiseSweep(iColorIndex, 12, 15);
       break;
     case 2:
       //3-way bounce
-      bounce(iColor, 5, 3, 20);
+      bounce(iColorIndex, 5, 3, 20);
       break;
     case 3:
       //6-way bounce
-      bounce(iColor, 5, 6, 30);
+      bounce(iColorIndex, 5, 6, 30);
+      break;
+    case 4:
+      //pulse fast
+      pulse(iColorIndex, 3);
+      break;
+    case 5:
+      //pulse slow
+      pulse(iColorIndex, 1);
       break;
     //TODO: more patterns
     default:
@@ -101,10 +129,9 @@ boolean isDynamicColor(int iColorIndex) {
 uint32_t rainbow(double dCyclesPerMinute) {
   // return a rainbow color based on the millis() value
   int i = ((int)(((double)(millis()) * 256.0 / (60000.0 / dCyclesPerMinute)))) % 256;
-  Serial.println(i);
-  // Input a value 0 to 255 to get a color value.
+  // the lines below are adapted from the Adafruit NeoPixel demo code
+  // https://github.com/adafruit/Adafruit_CircuitPython_NeoPixel (MIT license)
   // The colours are a transition r - g - b - back to r.
-  // (copied ad inifintum from the Adafruit NeoPixel demo code)
   if ((i < 0) || (i > 255))
     return strip.Color(0, 0, 0);
   if (i < 85)
@@ -171,6 +198,22 @@ void bounce(int iColorIndex, int iWidth, int iSides, int iWait) {
         strip.setPixelColor(bounceLeft(i - j) + k, fade(color, ((double)j / (double)iWidth)));
     strip.show();
     if (iWait > 0) delay(iWait);
+  }
+}
+
+void pulse(int iColorIndex, int iSpeed) {
+  uint32_t color = mapColor(iColorIndex);
+  strip.clear();
+  strip.show();
+  for (int i = 0; i <= 100; i += iSpeed) {
+    if (isDynamicColor(iColorIndex)) color = mapColor(iColorIndex);
+    strip.fill(fade(color, (double)(i) / 100.0));
+    strip.show();
+  }
+  for (int i = 100; i >= 0; i -= iSpeed) {
+    if (isDynamicColor(iColorIndex)) color = mapColor(iColorIndex);
+    strip.fill(fade(color, (double)(i) / 100.0));
+    strip.show();
   }
 }
 
