@@ -5,7 +5,7 @@
 
 #define NUM_PIXELS 60
 #define PIXEL_PIN 4
-#define PIXEL_BRIGHTNESS 50
+#define PIXEL_BRIGHTNESS 100
 
 // multiplexer A (LSB) to trinket A0 (Arduino pin 1!) as digital out
 #define MUX0_PIN 1
@@ -34,11 +34,11 @@ void setup() {
 void loop() {
   int iDipswitch = readDipswitch();
   int iPattern = (iDipswitch >> 4 & 0x0F);
-  int iColor = color(iDipswitch & 0x0F);
+  int iColor = (iDipswitch & 0x0F);
   switch (iPattern) {
     case 0:
       //clockwise sweep fast
-      clockwiseSweep(iColor, 12, 5);
+      clockwiseSweep(iColor, 12, 1);
       break;
     case 1:
       //clockwise sweep slow
@@ -46,25 +46,16 @@ void loop() {
       break;
     case 2:
       //3-way bounce
-      bounce(iColor, 5, 3, 35);
+      bounce(iColor, 5, 3, 20);
       break;
     case 3:
       //6-way bounce
-      bounce(iColor, 5, 6, 35);
+      bounce(iColor, 5, 6, 30);
       break;
     //TODO: more patterns
     default:
       delay(1000);
-
   }
-  taste_the_rainbow();
-}
-
-//never apologize, never explain
-#define RAINBOW_SPEED 16
-int iRainbowMagic = 0;
-void taste_the_rainbow() {
-    iRainbowMagic = (iRainbowMagic + RAINBOW_SPEED) % 256;
 }
 
 // swampgas color constants (indexed to dip switch selections)
@@ -75,12 +66,13 @@ void taste_the_rainbow() {
 #define YELLOW 4
 #define CYAN 5
 #define PURPLE 6
-// 7-14 TBD; will return white
-#define RAINBOW 15
+// 7-13 TBD; will return white
+#define RAINBOW_SLOW 14
+#define RAINBOW_FAST 15
 
 // color mapping
-uint32_t color(int iSelect) {
-  switch (iSelect) {
+uint32_t mapColor(int iColorIndex) {
+  switch (iColorIndex) {
     case WHITE: return strip.Color(255, 255, 255);
     case RED: return strip.Color(255, 0, 0);
     case BLUE: return strip.Color(0, 0, 255);
@@ -88,25 +80,42 @@ uint32_t color(int iSelect) {
     case YELLOW: return strip.Color(255, 150, 0);
     case CYAN: return strip.Color(0, 255, 255);
     case PURPLE: return strip.Color(180, 0, 255);
-    case RAINBOW: return wheel(iRainbowMagic);
+    case RAINBOW_SLOW: return rainbow(1.0);
+    case RAINBOW_FAST: return rainbow(6.0);
     default: return strip.Color(255, 255, 255);
   }
 }
 
-uint32_t wheel(int iPos) {
+// returns true if the index refers to a changing color (such as rainbow);
+// animation functions can call this to determine whether they need to
+// update the color during animations.
+boolean isDynamicColor(int iColorIndex) {
+  switch (iColorIndex) {
+    case RAINBOW_SLOW:
+    case RAINBOW_FAST:
+      return true;
+    default: return false;
+  }
+}
+
+uint32_t rainbow(double dCyclesPerMinute) {
+  // return a rainbow color based on the millis() value
+  int i = ((int)(((double)(millis()) * 256.0 / (60000.0 / dCyclesPerMinute)))) % 256;
+  Serial.println(i);
   // Input a value 0 to 255 to get a color value.
   // The colours are a transition r - g - b - back to r.
-  if ((iPos < 0) || (iPos > 255))
+  // (copied ad inifintum from the Adafruit NeoPixel demo code)
+  if ((i < 0) || (i > 255))
     return strip.Color(0, 0, 0);
-  if (iPos < 85)
-    return strip.Color(255 - iPos * 3, iPos * 3, 0);
-  if (iPos < 170)
+  if (i < 85)
+    return strip.Color(255 - i * 3, i * 3, 0);
+  if (i < 170)
   {
-    iPos -= 85;
-    return strip.Color(0, 255 - iPos * 3, iPos * 3);
+    i -= 85;
+    return strip.Color(0, 255 - i * 3, i * 3);
   }
-  iPos -= 170;
-  return strip.Color(iPos * 3, 0, 255 - iPos * 3);
+  i -= 170;
+  return strip.Color(i * 3, 0, 255 - i * 3);
 }
 
 uint32_t fade(uint32_t color, double frac) {
@@ -131,8 +140,10 @@ int bounceLeft(int iPos) {
   return iPos;
 }
 
-void clockwiseSweep(uint32_t color, int iWidth, int iWait) {
+void clockwiseSweep(int iColorIndex, int iWidth, int iWait) {
+  uint32_t color = mapColor(iColorIndex);
   for (int i = 0; i < NUM_PIXELS; i++) {
+    if (isDynamicColor(iColorIndex)) color = mapColor(iColorIndex);
     for (int j = 0; j <= iWidth; j++)
       strip.setPixelColor(((i + j) % NUM_PIXELS), fade(color, ((double)j / (double)iWidth)));
     strip.show();
@@ -140,10 +151,12 @@ void clockwiseSweep(uint32_t color, int iWidth, int iWait) {
   }
 }
 
-void bounce(uint32_t color, int iWidth, int iSides, int iWait) {
+void bounce(int iColorIndex, int iWidth, int iSides, int iWait) {
   int iPixelsPerSide = int(NUM_PIXELS / iSides);
+  uint32_t color = mapColor(iColorIndex);
   for (int i = 0; i < iPixelsPerSide; i++) {
     // sweeping left to right
+    if (isDynamicColor(iColorIndex)) color = mapColor(iColorIndex);
     for (int j = 0; j < (iWidth + 1); j++)
       for (int k = 0; k < NUM_PIXELS; k += iPixelsPerSide)
         strip.setPixelColor(bounceRight(i + j, iPixelsPerSide) + k, fade(color, ((double)j / (double)iWidth)));
@@ -152,6 +165,7 @@ void bounce(uint32_t color, int iWidth, int iSides, int iWait) {
   }
   for (int i = iPixelsPerSide - 2; i > 1; i -= 1) {
     // sweeping right to left
+    if (isDynamicColor(iColorIndex)) color = mapColor(iColorIndex);
     for (int j = 0; j <= iWidth; j++)
       for (int k = 0; k < NUM_PIXELS; k += iPixelsPerSide)
         strip.setPixelColor(bounceLeft(i - j) + k, fade(color, ((double)j / (double)iWidth)));
@@ -176,10 +190,6 @@ int readDipswitch() {
   int iValue = 0;
   for (int i = 0; i < 8; i++) {
     int iPinVal = readDipswitchPin(i);
-    Serial.print("Pin ");
-    Serial.print(i);
-    Serial.print(" is ");
-    Serial.println(iPinVal);
     iValue += iPinVal << i;
   }
   return iValue;
