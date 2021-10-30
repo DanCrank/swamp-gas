@@ -21,9 +21,10 @@
   #include <avr/power.h>
 #endif
 
-#define NUM_PIXELS 60
+#define NUM_PIXELS 120
 #define PIXEL_PIN 4
-#define PIXEL_BRIGHTNESS 100 // scale of 255
+#define PIXEL_BRIGHTNESS_HIGH 255 // scale of 255
+#define PIXEL_BRIGHTNESS_LOW 128 // scale of 255
 
 // multiplexer A (LSB) to trinket A0 (Arduino pin 1!) as digital out
 #define MUX0_PIN 1
@@ -37,40 +38,45 @@
 Adafruit_NeoPixel strip;
 
 void setup() {
-  Serial.println("SwampGas 1.0 Copyright (C) 2020 Dan Crank (danno@danno.org)");
+  Serial.println("SwampGas 1.1 Copyright (C) 2021 Dan Crank (danno@danno.org)");
   Serial.println("This program comes with ABSOLUTELY NO WARRANTY.");
+  randomSeed(analogRead(0));
   strip = Adafruit_NeoPixel(NUM_PIXELS, PIXEL_PIN, NEO_GRB + NEO_KHZ800);
   strip.begin();
-  strip.setBrightness(PIXEL_BRIGHTNESS);
+  int iDipswitch = readDipswitch();
+  int fBrightness = (iDipswitch & 0x01); //bit 0
+  if (fBrightness)
+    strip.setBrightness(PIXEL_BRIGHTNESS_HIGH);
+  else
+    strip.setBrightness(PIXEL_BRIGHTNESS_LOW);
   strip.clear(); // Initialize all pixels to 'off'
   strip.show();
   pinMode(MUX0_PIN, OUTPUT);
   pinMode(MUX1_PIN, OUTPUT);
   pinMode(MUX2_PIN, OUTPUT);
   pinMode(MUXOUT_PIN, INPUT); //circuit has pull-ups on the input side of the mux
-  //TODO: turn off the NeoPixel on the board
 }
 
 void loop() {
   int iDipswitch = readDipswitch();
-  int iPattern = (iDipswitch >> 4 & 0x0F);
-  int iColorIndex = (iDipswitch & 0x0F);
+  int iPattern = (iDipswitch >> 5 & 0x07); //bits 7-5
+  int iColorIndex = (iDipswitch >> 1 & 0x0F); //bits 4-1
   switch (iPattern) {
     case 0:
       //clockwise sweep fast
-      clockwiseSweep(iColorIndex, 12, 1);
+      counterClockwiseSweep(iColorIndex, 24, 1);
       break;
     case 1:
       //clockwise sweep slow
-      clockwiseSweep(iColorIndex, 12, 15);
+      counterClockwiseSweep(iColorIndex, 24, 15);
       break;
     case 2:
       //3-way bounce
-      bounce(iColorIndex, 5, 3, 20);
+      bounce(iColorIndex, 10, 3, 20);
       break;
     case 3:
       //6-way bounce
-      bounce(iColorIndex, 5, 6, 30);
+      bounce(iColorIndex, 10, 6, 30);
       break;
     case 4:
       //pulse fast
@@ -80,9 +86,30 @@ void loop() {
       //pulse slow
       pulse(iColorIndex, 1);
       break;
-    //TODO: more patterns
-    default:
-      delay(1000);
+    case 6:
+      dropout(iColorIndex, 1, 20);
+      break;
+    case 7:
+      //everything bagel
+      for (int q = 0; q < 3; q++) {
+        clockwiseSweep(iColorIndex, 24, 1);
+      }
+      strip.fill(strip.Color(0,0,0));
+      strip.show();
+      for (int q = 0; q < 3; q++) {
+        counterClockwiseSweep(iColorIndex, 24, 1);
+      }
+      strip.fill(strip.Color(0,0,0));
+      strip.show();
+      for (int w = 1; w < 21; w++) {
+        pulse(iColorIndex, w);
+      }
+      for (int q = 0; q < 3; q++) {
+        dropout(iColorIndex, 1, 20);
+      }
+      break;
+    default: //should never happen
+      delay(200);
   }
 }
 
@@ -95,8 +122,8 @@ void loop() {
 #define CYAN 5
 #define PURPLE 6
 // 7-13 TBD; will return white
-#define RAINBOW_SLOW 14
-#define RAINBOW_FAST 15
+#define RAINBOW_FAST 14
+#define RAINBOW_SLOW 15
 
 // color mapping
 uint32_t mapColor(int iColorIndex) {
@@ -108,8 +135,8 @@ uint32_t mapColor(int iColorIndex) {
     case YELLOW: return strip.Color(255, 150, 0);
     case CYAN: return strip.Color(0, 255, 255);
     case PURPLE: return strip.Color(180, 0, 255);
-    case RAINBOW_SLOW: return rainbow(1.0);
-    case RAINBOW_FAST: return rainbow(6.0);
+    case RAINBOW_SLOW: return rainbow(6.0);
+    case RAINBOW_FAST: return rainbow(20.0);
     default: return strip.Color(255, 255, 255);
   }
 }
@@ -169,6 +196,17 @@ int bounceLeft(int iPos) {
 
 void clockwiseSweep(int iColorIndex, int iWidth, int iWait) {
   uint32_t color = mapColor(iColorIndex);
+  for (int i = NUM_PIXELS-1; i >= 0; i--) {
+    if (isDynamicColor(iColorIndex)) color = mapColor(iColorIndex);
+    for (int j = 0; j <= iWidth; j++)
+      strip.setPixelColor(((i - j) % NUM_PIXELS), fade(color, ((double)j / (double)iWidth)));
+    strip.show();
+    if (iWait > 0) delay(iWait);
+  }
+}
+
+void counterClockwiseSweep(int iColorIndex, int iWidth, int iWait) {
+  uint32_t color = mapColor(iColorIndex);
   for (int i = 0; i < NUM_PIXELS; i++) {
     if (isDynamicColor(iColorIndex)) color = mapColor(iColorIndex);
     for (int j = 0; j <= iWidth; j++)
@@ -214,6 +252,37 @@ void pulse(int iColorIndex, int iSpeed) {
     if (isDynamicColor(iColorIndex)) color = mapColor(iColorIndex);
     strip.fill(fade(color, (double)(i) / 100.0));
     strip.show();
+  }
+}
+
+void dropout(int iColorIndex, int iFadeupSpeed, int iDropoutWait) {
+  uint32_t color = mapColor(iColorIndex);
+  strip.clear();
+  strip.show();
+  // fade up
+  for (int i = 0; i <= 100; i += iFadeupSpeed) {
+    if (isDynamicColor(iColorIndex)) color = mapColor(iColorIndex);
+    strip.fill(fade(color, (double)(i) / 100.0));
+    strip.show();
+  }
+  for (int w = 0; w < NUM_PIXELS; w++) {
+    // randomly drop pixels one at a time
+    // pick a pixel
+    int iPixel = (int)(random(NUM_PIXELS));
+    if (strip.getPixelColor(iPixel) != 0) {
+      // if it's on, turn it off
+      strip.setPixelColor(iPixel, strip.Color(0, 0, 0));
+    } else {
+      // otherwise, find the next pixel that's on and turn that one off
+      for (int j = 1; j < NUM_PIXELS; j++) {
+        if (strip.getPixelColor(iPixel + j % NUM_PIXELS) != 0) {
+          strip.setPixelColor(iPixel + j % NUM_PIXELS, 0);
+          break;
+        }
+      }
+    }
+    strip.show();
+    if (iDropoutWait > 0) delay(iDropoutWait);
   }
 }
 
