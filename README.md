@@ -1,12 +1,14 @@
 # swamp-gas
 Design for an illuminated saucer rocket
 
-`/3d-objects              STL files for 3D-printed parts
+```
+/3d-objects              STL files for 3D-printed parts
                          F3D and STEP files for complete rocket
 /lighting-controller
   /arduino/swamp-gas     Arduino code for the lighting program
   /board                 design files for carrier PCB
-    /images              images of the layout and manufactured board`
+    /images              images of the layout and manufactured board
+```
 
 Parts list:
 - 29mm motor tube, 100mm long
