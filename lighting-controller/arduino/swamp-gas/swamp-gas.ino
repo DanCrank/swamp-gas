@@ -90,23 +90,47 @@ void loop() {
       dropout(iColorIndex, 1, 20);
       break;
     case 7:
-      //everything bagel
-      for (int q = 0; q < 3; q++) {
-        clockwiseSweep(iColorIndex, 24, 1);
+      //everything bagel (2022)
+      strip.fill(strip.Color(0,0,0));
+      strip.show();
+      for (int q = 0; q < 5; q++) {
+        counterClockwiseSweepIncreasingSpeed(iColorIndex, 36);
+        counterClockwiseSweepDecreasingSpeed(iColorIndex, 36);
       }
       strip.fill(strip.Color(0,0,0));
       strip.show();
-      for (int q = 0; q < 3; q++) {
-        counterClockwiseSweep(iColorIndex, 24, 1);
+      for (int q = 0; q < 2; q++) {
+        for (int w = 1; w < 21; w++) {
+          pulse(iColorIndex, w);
+        }
+        for (int w = 20; w > 0; w--) {
+          pulse(iColorIndex, w);
+        }
       }
       strip.fill(strip.Color(0,0,0));
       strip.show();
-      for (int w = 1; w < 21; w++) {
-        pulse(iColorIndex, w);
+      for (int q = 0; q < 6; q++) {
+        dropout(iColorIndex, 1, 5);
       }
-      for (int q = 0; q < 3; q++) {
-        dropout(iColorIndex, 1, 20);
-      }
+      strip.fill(strip.Color(0,0,0));
+      strip.show();
+      //everything bagel (2021)
+      //for (int q = 0; q < 3; q++) {
+      //  clockwiseSweep(iColorIndex, 24, 1);
+      //}
+      //strip.fill(strip.Color(0,0,0));
+      //strip.show();
+      //for (int q = 0; q < 3; q++) {
+      //  counterClockwiseSweep(iColorIndex, 24, 1);
+      //}
+      //strip.fill(strip.Color(0,0,0));
+      //strip.show();
+      //for (int w = 1; w < 21; w++) {
+      //  pulse(iColorIndex, w);
+      //}
+      //for (int q = 0; q < 3; q++) {
+      //  dropout(iColorIndex, 1, 20);
+      //}
       break;
     default: //should never happen
       delay(200);
@@ -135,7 +159,7 @@ uint32_t mapColor(int iColorIndex) {
     case YELLOW: return strip.Color(255, 150, 0);
     case CYAN: return strip.Color(0, 255, 255);
     case PURPLE: return strip.Color(180, 0, 255);
-    case RAINBOW_SLOW: return rainbow(6.0);
+    case RAINBOW_SLOW: return rainbow(10.0);
     case RAINBOW_FAST: return rainbow(20.0);
     default: return strip.Color(255, 255, 255);
   }
@@ -216,6 +240,32 @@ void counterClockwiseSweep(int iColorIndex, int iWidth, int iWait) {
   }
 }
 
+void counterClockwiseSweepIncreasingSpeed(int iColorIndex, int iWidth) {
+  uint32_t color = mapColor(iColorIndex);
+  for (int iWait = 3; iWait >= 0; iWait--) {
+    for (int i = 0; i < NUM_PIXELS; i++) {
+      if (isDynamicColor(iColorIndex)) color = mapColor(iColorIndex);
+      for (int j = 0; j <= iWidth; j++)
+        strip.setPixelColor(((i + j) % NUM_PIXELS), fade(color, ((double)j / (double)iWidth)));
+      strip.show();
+      if (iWait > 0) delay(iWait * 2);
+    }
+  }
+}
+
+void counterClockwiseSweepDecreasingSpeed(int iColorIndex, int iWidth) {
+  uint32_t color = mapColor(iColorIndex);
+  for (int iWait = 0; iWait >= 3; iWait++) {
+    for (int i = 0; i < NUM_PIXELS; i++) {
+      if (isDynamicColor(iColorIndex)) color = mapColor(iColorIndex);
+      for (int j = 0; j <= iWidth; j++)
+        strip.setPixelColor(((i + j) % NUM_PIXELS), fade(color, ((double)j / (double)iWidth)));
+      strip.show();
+      if (iWait > 0) delay(iWait * 2);
+    }
+  }
+}
+
 void bounce(int iColorIndex, int iWidth, int iSides, int iWait) {
   int iPixelsPerSide = int(NUM_PIXELS / iSides);
   uint32_t color = mapColor(iColorIndex);
@@ -271,12 +321,18 @@ void dropout(int iColorIndex, int iFadeupSpeed, int iDropoutWait) {
     int iPixel = (int)(random(NUM_PIXELS));
     if (strip.getPixelColor(iPixel) != 0) {
       // if it's on, turn it off
+      strip.setPixelColor(iPixel, strip.Color(255, 255, 255));
+      strip.show();
+      delay(7);
       strip.setPixelColor(iPixel, strip.Color(0, 0, 0));
     } else {
-      // otherwise, find the next pixel that's on and turn that one off
+      // otherwise, find the next pixel that's on turn that one off
       for (int j = 1; j < NUM_PIXELS; j++) {
         if (strip.getPixelColor(iPixel + j % NUM_PIXELS) != 0) {
-          strip.setPixelColor(iPixel + j % NUM_PIXELS, 0);
+          strip.setPixelColor(iPixel + j % NUM_PIXELS, strip.Color(255, 255, 255));
+          strip.show();
+          delay(7);
+          strip.setPixelColor(iPixel + j % NUM_PIXELS, strip.Color(0, 0, 0));
           break;
         }
       }
